@@ -1,22 +1,22 @@
 import arcade
 
-# Constants
+# Constants for screen
 SCREEN_WIDTH = 1248
 SCREEN_HEIGHT = 720
 SCREEN_TITLE = "Jump It"
 
-# Constants used to scale our sprites from their original size
+# Constants used to scale sprites
 TILE_SCALING = 1
 CHARACTER_SCALING = TILE_SCALING
 SPRITE_PIXEL_SIZE = 128
 GRID_PIXEL_SIZE = SPRITE_PIXEL_SIZE * TILE_SCALING
 
-# Movement speed of player, in pixels per frame
+# Movement speeds for player, movement and jump speed are in pixels per frame
 PLAYER_MOVEMENT_SPEED = 10
 GRAVITY = 1.4
 PLAYER_JUMP_SPEED = 25
 
-
+# Constants for player spawn point
 PLAYER_START_X = 2
 PLAYER_START_Y = 1
 
@@ -24,22 +24,16 @@ PLAYER_START_Y = 1
 RIGHT_FACING = 0
 LEFT_FACING = 1
 
+# Constants for layer names within MapFinal.JSON
 LAYER_NAME_PLATFORMS = "Platforms"
 LAYER_NAME_BACKGROUND = "Background"
 LAYER_NAME_PLAYER = "Player"
 LAYER_NAME_SPIKE = "Spike"
 LAYER_NAME_DUCK = "Duck"
 
-
+# Loads a pair of textures, one for right-facing and the other for left-facing
 def load_texture_pair(filename):
-    """
-    Load a texture pair, with the second being a mirror image.
-    """
-    return [
-        arcade.load_texture(filename),
-        arcade.load_texture(filename, flipped_horizontally=True),
-    ]
-
+    return [arcade.load_texture(filename), arcade.load_texture(filename, flipped_horizontally=True)]
 
 class Entity(arcade.Sprite):
     def __init__(self, name_folder, name_file):
@@ -48,94 +42,76 @@ class Entity(arcade.Sprite):
         # Default to facing right
         self.facing_direction = RIGHT_FACING
 
-        # Used for image sequences
-        self.cur_texture = 0
-        self.scale = CHARACTER_SCALING
-
+        # Load textures
         self.idle_texture_pair = load_texture_pair("assets/Base_Model.png")
         self.jump_texture_pair = load_texture_pair("assets/Jump.png")
-
-        # Load textures for walking
-        self.walk_textures = []
-        for i in range(8):
-            texture = load_texture_pair("assets/Walk.png")
-            self.walk_textures.append(texture)
+        self.walk_textures = load_texture_pair("assets/Walk.png")
 
         # Set the initial texture
         self.texture = self.idle_texture_pair[0]
 
+        # Set hit box
         self.set_hit_box(self.texture.hit_box_points)
 
 
 class PlayerCharacter(Entity):
-    """Player Sprite"""
-
     def __init__(self):
 
         # Set up parent class
-        super().__init__("stickman", "stickman")
+        super().__init__("assets", "Base_Model.png")
 
-        # Track our state
+        # Track if jumping
         self.jumping = False
 
     def update_animation(self, delta_time: float = 1 / 60):
-
-        # Figure out if we need to flip face left or right
+        # Check if need to face right or left
         if self.change_x < 0 and self.facing_direction == RIGHT_FACING:
             self.facing_direction = LEFT_FACING
         elif self.change_x > 0 and self.facing_direction == LEFT_FACING:
             self.facing_direction = RIGHT_FACING
 
-        # Jumping animation
-        if self.change_y > 0:
-            self.texture = self.jump_texture_pair[self.facing_direction]
-            return
-        elif self.change_y < 0:
+        # Jumping
+        if self.change_y > 0 or self.change_y < 0:
             self.texture = self.jump_texture_pair[self.facing_direction]
             return
 
-        # Idle animation
+        # Idle
         if self.change_x == 0:
             self.texture = self.idle_texture_pair[self.facing_direction]
             return
 
-        # Walking animation
-        self.cur_texture += 1
-        if self.cur_texture > 7:
-            self.cur_texture = 0
-        self.texture = self.walk_textures[self.cur_texture][self.facing_direction]
+        # Walking
+        self.texture = self.walk_textures[self.facing_direction]
 
 
-class MyGame(arcade.Window):
+class JumpIt(arcade.Window):
     def __init__(self):
-        # Call the parent class and set up the window
+        # Call the parent class to set up the window
         super().__init__(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
 
-        # Track the current state of what key is pressed
+        # Initialize the current state of which keys are pressed
         self.left_pressed = False
         self.right_pressed = False
         self.up_pressed = False
         self.jump_needs_reset = False
         self.reset_pressed = False
 
-        # Our TileMap Object
+        # Initialize tile mao
         self.tile_map = None
 
-        # Our Scene Object
+         # Initialize scene
         self.scene = None
 
-        # Separate variable that holds the player sprite
+        # Initialize player sprite
         self.player_sprite = None
 
-        # Our 'physics' engine
+        # Initialize physics engine
         self.physics_engine = None
 
-
-        self.end_of_map = 0
-
-        # Keep track of the score
+         # Initialize score
         self.score = 1000
 
+        # Initialize end screen text
         self.win_text = ""
         self.final_score = ""
         self.reset_text = ""
@@ -147,12 +123,10 @@ class MyGame(arcade.Window):
 
 
     def setup(self):
-        """Set up the game here. Call this function to restart the game."""
-
-        # Map name
+        # TileMap name
         map_name = "assets/MapFinal.JSON"
 
-        # Layer Specific Options for the Tilemap
+        # Layer Options for the Tilemap, using true for every object that doesn't move
         layer_options = {
             LAYER_NAME_PLATFORMS: {
                 "use_spatial_hash": True,
@@ -165,32 +139,31 @@ class MyGame(arcade.Window):
             },
         }
 
-        # Load in TileMap and set as scene
+        # Loading in TileMap and setting as scene
         self.tile_map = arcade.load_tilemap(map_name, TILE_SCALING, layer_options, None, "Simple", 4.5, (-48,0))
         self.scene = arcade.Scene.from_tilemap(self.tile_map)
 
-        # Set up the player, specifically placing it at these coordinates.
+        # Set up the player and placing it at spawn point
         self.player_sprite = PlayerCharacter()
         self.player_sprite.center_x = (self.tile_map.tile_width * TILE_SCALING * PLAYER_START_X)
         self.player_sprite.center_y = (self.tile_map.tile_height * TILE_SCALING * PLAYER_START_Y)
         self.scene.add_sprite(LAYER_NAME_PLAYER, self.player_sprite)
 
-        # Calculate the right edge of the my_map in pixels
-        self.end_of_map = self.tile_map.width * GRID_PIXEL_SIZE
 
-        # Create the 'physics engine'
+        # Creating the physics engine
         self.physics_engine = arcade.PhysicsEnginePlatformer(
             self.player_sprite,
             gravity_constant=GRAVITY,
             walls=self.scene[LAYER_NAME_PLATFORMS]
         )
 
+        # Resetting the end screen text for if restart is used
         self.win_text = ""
         self.final_score = ""
         self.reset_text = ""
 
     def restart(self):
-        # Set up the player, specifically placing it at these coordinates.
+        # Reseting player locaton to spawn point, resetting x and y speed to 0, and turning off key presses so you don't keep moving on respawn until you release and press again
         self.player_sprite.change_x = 0
         self.player_sprite.change_y = 0
         self.jump_needs_reset = False
@@ -200,13 +173,13 @@ class MyGame(arcade.Window):
         self.player_sprite.center_y = (self.tile_map.tile_height * TILE_SCALING * PLAYER_START_Y)
 
     def on_draw(self):
-        # Clear the screen to the background color
+        # Clear the screen
         self.clear()
 
-        # Draw our Scene
+        # Draw the Scene
         self.scene.draw()
 
-        # Draw our score on the screen, scrolling it with the viewport
+        # Drawing text elements onto the screen, the last three will be invisible until the end screen
         score_text = f"Score: {self.score}"
         arcade.draw_text(score_text, 10, 10, arcade.csscolor.BLACK, 18)
 
@@ -243,12 +216,19 @@ class MyGame(arcade.Window):
 
 
     def on_key_press(self, key, modifiers):
+        # Check if up
         if key == arcade.key.UP or key == arcade.key.W:
             self.up_pressed = True
+
+        # Check if left
         elif key == arcade.key.LEFT or key == arcade.key.A:
             self.left_pressed = True
+
+        # Check if right
         elif key == arcade.key.RIGHT or key == arcade.key.D:
             self.right_pressed = True
+        
+        # Check if r
         elif key == arcade.key.R:
             self.reset_pressed = True
             self.jump_needs_reset = False
@@ -257,37 +237,42 @@ class MyGame(arcade.Window):
             self.score = 1000
             self.setup()
 
+        # Once you know the new key, process it
         self.process_keychange()
 
     def on_key_release(self, key, modifiers):
-
+        # Check if up
         if key == arcade.key.UP or key == arcade.key.W:
             self.up_pressed = False
             self.jump_needs_reset = False
+        
+        # Check if left
         elif key == arcade.key.LEFT or key == arcade.key.A:
             self.left_pressed = False
+
+         # Check if right
         elif key == arcade.key.RIGHT or key == arcade.key.D:
             self.right_pressed = False
+
+        # Check if r
         elif key == arcade.key.R:
             self.reset_pressed = False
-
+        
+        # Once you know the missing key, process it
         self.process_keychange()
 
 
     def on_update(self, delta_time):
-        """Movement and game logic"""
-
         # Move the player with the physics engine
         self.physics_engine.update()
 
-        # Update animations
+        # Update animations and jump state
         if self.physics_engine.can_jump():
             self.player_sprite.can_jump = False
         else:
             self.player_sprite.can_jump = True
 
-
-        # Update Animations
+        # Update animations for each layer in the TileMap
         self.scene.update_animation(
             delta_time,
             [
@@ -298,8 +283,7 @@ class MyGame(arcade.Window):
             ],
         )
 
-
-
+        # Making a list of all collisions player is currently touching
         player_collision_list = arcade.check_for_collision_with_lists(
             self.player_sprite,
             [
@@ -308,7 +292,7 @@ class MyGame(arcade.Window):
             ],
         )
 
-
+        # Processing each collision, displaying end screen if duck, removing spike otherwise
         for collision in player_collision_list:
             if self.scene[LAYER_NAME_DUCK] in collision.sprite_lists:
                 arcade.play_sound(self.win)
@@ -322,9 +306,10 @@ class MyGame(arcade.Window):
             self.score -= 50
             collision.remove_from_sprite_lists()
             self.restart()
-                
+
+# Start up function                
 def main():
-    window = MyGame()
+    window = JumpIt()
     window.setup()
     arcade.run()
 
